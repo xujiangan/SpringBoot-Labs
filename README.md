@@ -1,6 +1,6 @@
 # 快速开始
 
-> 本仓库中每个 `lab-*` / `labx-*` 目录都是一个**可独立构建、独立启动**的 Maven 工程。但其中部分 `lab-*` 是 POM **多模块聚合器**（如 [lab-23](./lab-23)），真正的 Spring Boot 应用位于它的子模块（如 `lab-23/lab-springmvc-23-01`）中；其余 `lab-*` 自身就是单个可运行模块。下面以 [lab-23](./lab-23)（SpringMVC 入门）为例，给出可在本仓库内直接核验的「获取 → 安装 → 启动 → 调用」最小闭环；**若遇到聚合器，请先 `cd` 进具体的子模块再构建/启动**，其余单模块 lab 步骤完全一致。
+> 本仓库中每个 `lab-*` / `labx-*` 目录都是一个**可独立构建、独立启动**的 Maven 工程。但其中部分 `lab-*` 是 POM **多模块聚合器**（如 [lab-23](./lab-23)），真正的 Spring Boot 应用位于它的子模块（如 `lab-23/lab-springmvc-23-01`）中；其余 `lab-*` 自身就是单个可运行模块。下面以 [lab-23](./lab-23)（SpringMVC 入门）为例，给出可在本仓库内直接核验的「获取 → 安装 → 启动 → 调用」最小闭环；**若遇到聚合器，请先 `cd` 进具体的子模块再构建/启动**。注意：部分子模块 POM 未声明 `spring-boot-maven-plugin`，启动前请先按「4. 启动」补插件或用 classpath 方式（见该节），其余单模块 lab 步骤完全一致。
 
 ## 1. 环境要求
 
@@ -33,8 +33,10 @@ ls -d ./lab-23/lab-springmvc-23-01    # 真正的 Spring Boot 子模块
 
 ```bash
 cd lab-23                                 # 聚合器工程：构建会同时编译其全部子模块
-mvn clean package -DskipTests             # 下载依赖 + 编译打包，子模块的 jar 在各自 target/ 下
+mvn clean package -DskipTests             # 下载依赖 + 编译打包
 ```
+
+> 说明：子模块若未声明 `spring-boot-maven-plugin`（如 `lab-23/lab-springmvc-23-01`），上面打出的只是**普通 jar**，不能直接 `java -jar`。要得到可执行 jar，请在启动前按「4. 启动·方式一」补上插件，或用「4. 启动·方式二」的 classpath 方式运行。
 
 需要一次性聚合构建多个 lab 时，回到仓库根目录执行：
 
@@ -46,14 +48,43 @@ mvn clean install -DskipTests
 
 ## 4. 启动
 
-```bash
-# 聚合器 lab-23 自身是 packaging=pom，不能直接运行；必须进入具体的子模块
-cd lab-23/lab-springmvc-23-01          # 子模块一（也可改用 lab-springmvc-23-02）
-mvn spring-boot:run                    # 方式一：直接运行该子模块
-java -jar target/*.jar                 # 方式二：运行第 3 步在该子模块 target/ 下打出的 jar
+> ⚠️ 前置校验：仓库内很多子模块（如 `lab-23/lab-springmvc-23-01`）的 `pom.xml` 只声明了 `spring-boot-starter-web` 等依赖，**没有**在 `<build>` 中声明 `spring-boot-maven-plugin`。此时：
+> - `mvn spring-boot:run` 会报 `No plugin found for prefix 'spring-boot'`；
+> - `mvn clean package` 产出的是**普通（thin）jar**，没有可执行 `Main-Class`，`java -jar` 会报 `no main manifest attribute`。
+> 因此请先用下面的方式一或方式二让该模块真正可运行，再启动。
+
+### 方式一（推荐）：补上插件，得到标准可执行 jar
+
+在子模块 `lab-23/lab-springmvc-23-01/pom.xml` 的 `<build><plugins>` 中加入（版本由 `spring-boot-starter-parent` 统一管理，省略即可；若未使用 parent 请补 `<version>2.x.x</version>`）：
+
+```xml
+<plugin>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-maven-plugin</artifactId>
+</plugin>
 ```
 
-启动成功的标志：控制台输出 `Started Application in x.xxx seconds`，并打印实际监听端口（默认 `8080`，以 `lab-23/lab-springmvc-23-01/src/main/resources/application.yaml` 中的 `server.port` 为准）。按 `Ctrl + C` 停止服务。
+```bash
+cd lab-23/lab-springmvc-23-01
+mvn clean package                              # 现在会 repackage 出可执行 fat-jar
+java -jar target/lab-springmvc-23-01-*.jar     # 运行第 3 步打出的 jar
+# 插件就位后，也可直接：
+mvn spring-boot:run
+```
+
+### 方式二（不改 POM，冻结仓库即可直接核验）：用依赖 classpath 运行主类
+
+```bash
+cd lab-23/lab-springmvc-23-01
+mvn clean compile                                         # 编译主代码与资源到 target/classes
+mvn dependency:build-classpath -Dmdep.outputFile=cp.txt   # 导出依赖 classpath（Maven 内置插件，无需声明）
+# Linux / macOS：
+java -cp "target/classes:$(cat cp.txt)" cn.iocoder.springboot.lab23.springmvc.Application
+# Windows（PowerShell，分隔符用分号）：
+# java -cp "target/classes;$(Get-Content cp.txt)" cn.iocoder.springboot.lab23.springmvc.Application
+```
+
+启动成功的标志：控制台输出 `Started Application in x.xxx seconds`，并打印实际监听端口（默认 `8080`；端口设置见「6. 配置说明」中的 `server.port` 与命令行覆盖示例）。按 `Ctrl + C` 停止服务。
 
 ## 5. 调用与验证
 
@@ -71,7 +102,7 @@ curl -i "http://127.0.0.1:8080/<path>"
 ### 6.1 找到某个 lab 的配置文件
 
 ```bash
-ls -R lab-23/lab-springmvc-23-01/src/main/resources   # 聚合器：配置在子模块里，不在 lab-23 根目录
+ls -R lab-23/lab-springmvc-23-01/src/main/resources   # 聚合器：配置在子模块里（该子模块可能用 application.properties，或还没有配置文件）
 grep -rn "server.port" lab-23/lab-springmvc-23-01/src  # Linux/macOS：全局搜索某个配置项
 findstr /s "server.port" lab-23\lab-springmvc-23-01\src\*  # Windows：等价搜索
 ```
@@ -108,12 +139,13 @@ findstr /s "server.port" lab-23\lab-springmvc-23-01\src\*  # Windows：等价搜
 
 ```yaml
 # lab-23/lab-springmvc-23-01/src/main/resources/application.yaml
+# （该子模块原本可能用 application.properties，或根本没有配置文件；没有也能启动，端口默认 8080）
 server:
   port: 8081
 ```
 
 ```bash
-cd lab-23/lab-springmvc-23-01 && mvn spring-boot:run
+cd lab-23/lab-springmvc-23-01 && mvn spring-boot:run   # 需先按「4. 启动·方式一」补插件；或用方式二的 classpath 命令
 # 日志出现 Tomcat started on port(s): 8081 (http) 即配置已生效
 curl -i "http://127.0.0.1:8081/<path>"
 ```
@@ -141,7 +173,8 @@ docker run -d --name nacos -p 8848:8848 -e MODE=standalone nacos/nacos-server:2.
 ### 6.5 示例三：多环境切换与临时覆盖
 
 ```bash
-# 以下命令均在该子模块目录内执行（如 lab-23/lab-springmvc-23-01）
+# 以下命令均在该子模块目录内执行（如 lab-23/lab-springmvc-23-01）；需先按「4. 启动·方式一」补插件
+# （不改 POM 时，把 mvn spring-boot:run / java -jar 换成「4. 启动·方式二」的 classpath 命令）
 # 1）激活 application-dev.yaml
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 java -jar target/*.jar --spring.profiles.active=dev
