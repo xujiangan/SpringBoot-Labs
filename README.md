@@ -1,6 +1,6 @@
 # 快速开始
 
-> 本仓库中每个 `lab-*` / `labx-*` 目录都是一个**可独立构建、独立启动**的 Maven 工程。下面以 [lab-23](./lab-23)（SpringMVC 入门）为例，给出可在本仓库内直接核验的「获取 → 安装 → 启动 → 调用」最小闭环；换成任意一个 `lab-*` 目录，步骤完全一致。
+> 本仓库中每个 `lab-*` / `labx-*` 目录都是一个**可独立构建、独立启动**的 Maven 工程。但其中部分 `lab-*` 是 POM **多模块聚合器**（如 [lab-23](./lab-23)），真正的 Spring Boot 应用位于它的子模块（如 `lab-23/lab-springmvc-23-01`）中；其余 `lab-*` 自身就是单个可运行模块。下面以 [lab-23](./lab-23)（SpringMVC 入门）为例，给出可在本仓库内直接核验的「获取 → 安装 → 启动 → 调用」最小闭环；**若遇到聚合器，请先 `cd` 进具体的子模块再构建/启动**，其余单模块 lab 步骤完全一致。
 
 ## 1. 环境要求
 
@@ -24,15 +24,16 @@ cd <仓库根目录>
 进入根目录后，可以先确认后续命令依赖的文件都在：
 
 ```bash
-ls ./pom.xml      # 根聚合 POM
-ls -d ./lab-23    # 示例工程目录
+ls ./pom.xml                           # 根聚合 POM
+ls -d ./lab-23                        # 示例工程目录（聚合器）
+ls -d ./lab-23/lab-springmvc-23-01    # 真正的 Spring Boot 子模块
 ```
 
 ## 3. 安装依赖与构建
 
 ```bash
-cd lab-23                        # 进入任意一个 lab-* 工程
-mvn clean package -DskipTests    # 下载依赖 + 编译打包，产物在 target/ 下
+cd lab-23                                 # 聚合器工程：构建会同时编译其全部子模块
+mvn clean package -DskipTests             # 下载依赖 + 编译打包，子模块的 jar 在各自 target/ 下
 ```
 
 需要一次性聚合构建多个 lab 时，回到仓库根目录执行：
@@ -46,12 +47,13 @@ mvn clean install -DskipTests
 ## 4. 启动
 
 ```bash
-# 在 lab-23 目录下，以下两种方式二选一
-mvn spring-boot:run         # 方式一：直接运行
-java -jar target/*.jar      # 方式二：运行第 3 步打出的 jar
+# 聚合器 lab-23 自身是 packaging=pom，不能直接运行；必须进入具体的子模块
+cd lab-23/lab-springmvc-23-01          # 子模块一（也可改用 lab-springmvc-23-02）
+mvn spring-boot:run                    # 方式一：直接运行该子模块
+java -jar target/*.jar                 # 方式二：运行第 3 步在该子模块 target/ 下打出的 jar
 ```
 
-启动成功的标志：控制台输出 `Started XxxApplication in x.xxx seconds`，并打印实际监听端口（默认 `8080`，以 `lab-23/src/main/resources/application.yaml` 中的 `server.port` 为准）。按 `Ctrl + C` 停止服务。
+启动成功的标志：控制台输出 `Started Application in x.xxx seconds`，并打印实际监听端口（默认 `8080`，以 `lab-23/lab-springmvc-23-01/src/main/resources/application.yaml` 中的 `server.port` 为准）。按 `Ctrl + C` 停止服务。
 
 ## 5. 调用与验证
 
@@ -69,9 +71,9 @@ curl -i "http://127.0.0.1:8080/<path>"
 ### 6.1 找到某个 lab 的配置文件
 
 ```bash
-ls -R lab-23/src/main/resources          # 列出该工程全部配置文件
-grep -rn "server.port" lab-23/src        # Linux/macOS：全局搜索某个配置项
-findstr /s "server.port" lab-23\src\*    # Windows：等价搜索
+ls -R lab-23/lab-springmvc-23-01/src/main/resources   # 聚合器：配置在子模块里，不在 lab-23 根目录
+grep -rn "server.port" lab-23/lab-springmvc-23-01/src  # Linux/macOS：全局搜索某个配置项
+findstr /s "server.port" lab-23\lab-springmvc-23-01\src\*  # Windows：等价搜索
 ```
 
 常见文件与用途：
@@ -82,6 +84,8 @@ findstr /s "server.port" lab-23\src\*    # Windows：等价搜索
 | `application-{profile}.yaml`（如 `-dev`） | 是 | 按环境覆盖上述配置 |
 | `*.sql` | 是（一次性） | 该 lab 的建表 / 初始化脚本，首次运行前需导入 |
 | `logback-spring.xml` | 否 | 仅日志格式与级别 |
+
+> 注意：聚合器 lab（如 `lab-23`）的配置文件在**子模块**目录内，例如 `lab-23/lab-springmvc-23-01/src/main/resources/`，而非 `lab-23` 根目录。单模块 lab 则在 `lab-xx/src/main/resources/`。
 
 ### 6.2 需要配置的项与参考值
 
@@ -103,13 +107,13 @@ findstr /s "server.port" lab-23\src\*    # Windows：等价搜索
 ### 6.3 示例一：改端口并验证（无需任何中间件）
 
 ```yaml
-# lab-23/src/main/resources/application.yaml
+# lab-23/lab-springmvc-23-01/src/main/resources/application.yaml
 server:
   port: 8081
 ```
 
 ```bash
-cd lab-23 && mvn spring-boot:run
+cd lab-23/lab-springmvc-23-01 && mvn spring-boot:run
 # 日志出现 Tomcat started on port(s): 8081 (http) 即配置已生效
 curl -i "http://127.0.0.1:8081/<path>"
 ```
@@ -137,6 +141,7 @@ docker run -d --name nacos -p 8848:8848 -e MODE=standalone nacos/nacos-server:2.
 ### 6.5 示例三：多环境切换与临时覆盖
 
 ```bash
+# 以下命令均在该子模块目录内执行（如 lab-23/lab-springmvc-23-01）
 # 1）激活 application-dev.yaml
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 java -jar target/*.jar --spring.profiles.active=dev
@@ -162,14 +167,14 @@ curl -s http://127.0.0.1:8080/actuator/env | head -n 20
 curl -s http://127.0.0.1:8080/actuator/configprops | head -n 20
 ```
 
-> 中间件未就绪时：只有用到该中间件的 lab 才会启动失败。可把地址改指向已有实例，或按 6.4 起一个本地容器；与中间件无关的 lab（如 [lab-23](./lab-23)、[lab-47](./lab-47)）无需任何中间件，仅改 `server.port` 即可运行。
+> 中间件未就绪时：只有用到该中间件的 lab 才会启动失败。可把地址改指向已有实例，或按 6.4 起一个本地容器；与中间件无关的 lab（如 `lab-23/lab-springmvc-23-01`、[lab-47](./lab-47)）无需任何中间件，仅改 `server.port` 即可运行。
 
 ## 目录约定
 
 | 路径 | 说明 |
 | --- | --- |
 | [./pom.xml](./pom.xml) | 根聚合 POM，默认注释了所有 `<module>`，按需放开 |
-| `./lab-*/src/main/resources/` | 各 lab 的配置文件目录，包含 `application.yaml`、`application-{profile}.yaml`、初始化 `*.sql` |
+| `./lab-*/src/main/resources/` | 各 lab 的配置文件目录，包含 `application.yaml`、`application-{profile}.yaml`、初始化 `*.sql`；聚合器 lab 的路径为 `./lab-xx/<子模块>/src/main/resources/` |
 | `./lab-*` | 《Spring Boot 专栏》的实验工程，编号与下文教程一一对应，例如 [lab-23](./lab-23) |
 | `./labx-*` | 《Spring Cloud 专栏》《Spring Cloud Alibaba 专栏》的实验工程，例如 [labx-01-spring-cloud-alibaba-nacos-discovery](./labx-01-spring-cloud-alibaba-nacos-discovery) |
 | [lab-71-http-debug](./lab-71-http-debug) | IDEA HTTP Client 的接口调用示例 |
